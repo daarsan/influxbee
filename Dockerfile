@@ -30,4 +30,4 @@ WORKDIR $APP_PATH
 
 VOLUME /config
 
-ENTRYPOINT ["$APP_PATH/influxbee.sh"]
+ENTRYPOINT ["/influxbee/influxbee.sh"]
