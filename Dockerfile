@@ -1,8 +1,7 @@
 FROM python:3.6.4-alpine
 
 # Define variables
-ENV APP_PATH=/influxbee \
-    MIRUBEE_USER=user \
+ENV MIRUBEE_USER=user \
     MIRUBEE_PASSWORD=password \
     INFLUXDB_HOST=localhost \
     INFLUXDB_DATABASE=mirubee \
@@ -18,15 +17,15 @@ ADD requirements.txt /requirements.txt
 # your production requirements file, if needed.
 RUN set -ex \
     && apk update \
-    && python3 -m venv $APP_PATH/venv \
-    && $APP_PATH/venv/bin/pip install -U pip \
-    && LIBRARY_PATH=/lib:/usr/lib /bin/sh -c "$APP_PATH/venv/bin/pip install --no-cache-dir -r /requirements.txt"
+    && python3 -m venv /influxbee/venv \
+    && /influxbee/venv/bin/pip install -U pip \
+    && LIBRARY_PATH=/lib:/usr/lib /bin/sh -c "/influxbee/venv/bin/pip install --no-cache-dir -r /requirements.txt"
 
 # Copy your application code to the container (make sure you create a .dockerignore file if any large files or directories should be excluded)
-COPY / $APP_PATH/
+COPY / /influxbee/
 RUN mkdir /config && \
-    chmod +x $APP_PATH/influxbee.sh
-WORKDIR $APP_PATH
+    chmod +x /influxbee/influxbee.sh
+WORKDIR /influxbee
 
 VOLUME /config
 
