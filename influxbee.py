@@ -10,9 +10,10 @@ import requests
 import argparse
 import os
 
-class MirubeeUserInfo():
-    def init(self):
-        pass
+import time
+
+from influxdb import InfluxDBClient
+from datetime import datetime, timedelta
 
 
 class MirubeeApi():
@@ -90,6 +91,13 @@ class MirubeeApi():
 
         return self._get(url)
 
+    def getChannelData(self, building_id, meter_id, channel_id, start, end):
+        url = "buildings/{}/meters/{}/channels/{}/data".format(building_id, meter_id, channel_id)
+        url = "{}?start={}&end={}&param=P".format(url, start.isoformat(), end.isoformat())
+
+        return self._get(url)
+
+
     def scan(self):
         user_data = {
             "MIRUBEE_API_TOKEN": self.MIRUBEE_API_TOKEN
@@ -144,11 +152,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Pull data from mirubee.')
     parser.add_argument('--user', '-u', help='Username')
     parser.add_argument('--password', '-p', help='Password')
-    parser.add_argument('--verbose_mode', help='Increase output verbosity', action="store_true")
+    parser.add_argument('--verbose', help='Increase output verbosity', action="store_true")
     parser.add_argument('--config_file', help='Path of the file with the information of user')
+    parser.add_argument('--influxdb_host', help='Influxdb IP Address')
+    parser.add_argument('--influxdb_port', default=8086, help='Influxdb IP Address')
+    parser.add_argument('--influxdb_database', default='mirubee', help='Influxdb IP Address')
+    parser.add_argument('--influxdb_user', default='root',help='Influxdb IP Address')
+    parser.add_argument('--influxdb_password', default='root', help='Influxdb IP Address')
+    parser.add_argument('--requests_per_day', default=24, type=int, help='Number of request per day. The free API offers up to 1000 hits per day.')
     args = parser.parse_args()
 
-    logger = _setup_logger(args.verbose_mode)
+    logger = _setup_logger(args.verbose)
 
     mirubee = MirubeeApi()
 
@@ -176,38 +190,46 @@ if __name__ == "__main__":
         with open(config_file, 'w') as f:
             json.dump(user_data, f, indent=2)
 
-    for MIRUBEE_USER_BUILDING in user_data['MIRUBEE_USER_BUILDINGS']:
-        for MIRUBEE_BUILDING_METER in MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_METERS']:
-            for MIRUBEE_METER_CHANNEL in MIRUBEE_BUILDING_METER['MIRUBEE_METER_CHANNELS']:
-                if MIRUBEE_METER_CHANNEL['MIRUBEE_CHANNEL_MAIN']:
-                    measure = mirubee.getChannelLast(MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_ID'],
-                                                     MIRUBEE_BUILDING_METER['MIRUBEE_METER_ID'],
-                                                     MIRUBEE_METER_CHANNEL['MIRUBEE_CHANNEL_ID'])
-                    logger.info(measure)
+    if (args.influxdb_host):
+        client = InfluxDBClient(host=args.influxdb_host, port=args.influxdb_port, username=args.influxdb_user,
+                                password=args.influxdb_password)
+        client.create_database(args.influxdb_database)
+        # client.create_retention_policy("mirubee_retention", "52w", "3", database=args.influxdb_database)
+        client.switch_database(args.influxdb_database)
+    else:
+        client = None
 
-    # MIRUBEE_API_TOKEN = os.environ.get("MIRUBEE_API_TOKEN", mirubee.login(args.user, args.password))
-    # logger.debug(MIRUBEE_API_TOKEN)
-    #
-    # MIRUBEE_USER_INFO = mirubee.getInfo()
-    # logger.debug(MIRUBEE_USER_INFO)
-    #
-    # MIRUBEE_USER_BUILDINGS = mirubee.getBuildings(MIRUBEE_USER_INFO['id'])
-    #
-    # for MIRUBEE_USER_BUILDING in MIRUBEE_USER_BUILDINGS:
-    #     logger.debug(MIRUBEE_USER_BUILDING)
-    #
-    #     MIRUBEE_BUILDING_INFO = mirubee.getBuildingInfo(MIRUBEE_USER_BUILDING['id'])
-    #     logger.debug(MIRUBEE_BUILDING_INFO)
-    #
-    #     MIRUBEE_BUILDING_METERS = mirubee.getBuildingMeters(MIRUBEE_USER_BUILDING['id'])
-    #     for MIRUBEE_BUILDING_METER in MIRUBEE_BUILDING_METERS:
-    #         logger.debug(MIRUBEE_BUILDING_METER)
-    #
-    #         MIRUBEE_METER_INFO = mirubee.getMeterInfo(MIRUBEE_USER_BUILDING['id'], MIRUBEE_BUILDING_METER['meter']['id'])
-    #         logger.debug(MIRUBEE_METER_INFO)
-    #
-    #         for MIRUBEE_METER_CHANNEL in MIRUBEE_METER_INFO['channels']:
-    #             if MIRUBEE_METER_CHANNEL['main_connection']:
-    #                 measure = mirubee.getChannelLast(MIRUBEE_USER_BUILDING['id'], MIRUBEE_BUILDING_METER['meter']['id'],
-    #                                       MIRUBEE_METER_CHANNEL['channel_id'])
-    #                 logger.info(measure)
+    sleep_interval = 24*60*60/args.requests_per_day
+    logger.info("Sleep interval: {} secs".format(sleep_interval))
+    start = datetime.utcnow() - timedelta(minutes=5)
+
+    while True:
+        for MIRUBEE_USER_BUILDING in user_data['MIRUBEE_USER_BUILDINGS']:
+            end = datetime.utcnow()
+            for MIRUBEE_BUILDING_METER in MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_METERS']:
+                for MIRUBEE_METER_CHANNEL in MIRUBEE_BUILDING_METER['MIRUBEE_METER_CHANNELS']:
+                    if MIRUBEE_METER_CHANNEL['MIRUBEE_CHANNEL_MAIN']:
+                        measures = mirubee.getChannelData(MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_ID'],
+                                                             MIRUBEE_BUILDING_METER['MIRUBEE_METER_ID'],
+                                                             MIRUBEE_METER_CHANNEL['MIRUBEE_CHANNEL_ID'],
+                                                             start,
+                                                             end)
+
+                        data = [{
+                            "measurement": "mirubee",
+                            "tags": {
+                                "mirubee_building_id": MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_ID'],
+                                "mirubee_meter_id": MIRUBEE_BUILDING_METER['MIRUBEE_METER_ID'],
+                                "mirubee_channel_id": MIRUBEE_METER_CHANNEL['MIRUBEE_CHANNEL_ID'],
+                            },
+                            "time": measure_time,
+                            "fields": {
+                                "P": float(measure_power)
+                            }
+                        } for measure_power, measure_time in zip(measures['data']['P'], measures['data']['time'])]
+                        logger.debug(data)
+                        if client:
+                            client.write_points(data)
+                        time.sleep(sleep_interval)
+
+            start = end
