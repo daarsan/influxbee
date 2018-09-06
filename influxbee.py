@@ -153,13 +153,13 @@ if __name__ == "__main__":
     parser.add_argument('--user', '-u', help='Username')
     parser.add_argument('--password', '-p', help='Password')
     parser.add_argument('--verbose', help='Increase output verbosity', action="store_true")
-    parser.add_argument('--config_file', help='Path of the file with the information of user')
-    parser.add_argument('--influxdb_host', help='Influxdb IP Address')
-    parser.add_argument('--influxdb_port', default=8086, help='Influxdb IP Address')
-    parser.add_argument('--influxdb_database', default='mirubee', help='Influxdb IP Address')
-    parser.add_argument('--influxdb_user', default='root',help='Influxdb IP Address')
-    parser.add_argument('--influxdb_password', default='root', help='Influxdb IP Address')
-    parser.add_argument('--requests_per_day', default=24, type=int, help='Number of request per day. The free API offers up to 1000 hits per day.')
+    parser.add_argument('--config-file', help='Path of the file with the information of user')
+    parser.add_argument('--influxdb-host', help='Influxdb IP Address')
+    parser.add_argument('--influxdb-port', default=8086, help='Influxdb IP Address')
+    parser.add_argument('--influxdb-database', default='mirubee', help='Influxdb IP Address')
+    parser.add_argument('--influxdb-user', default='root',help='Influxdb IP Address')
+    parser.add_argument('--influxdb-password', default='root', help='Influxdb IP Address')
+    parser.add_argument('--requests-per-day', default=24, type=int, help='Number of request per day. The free API offers up to 1000 hits per day.')
     args = parser.parse_args()
 
     logger = _setup_logger(args.verbose)
@@ -194,7 +194,6 @@ if __name__ == "__main__":
         client = InfluxDBClient(host=args.influxdb_host, port=args.influxdb_port, username=args.influxdb_user,
                                 password=args.influxdb_password)
         client.create_database(args.influxdb_database)
-        # client.create_retention_policy("mirubee_retention", "52w", "3", database=args.influxdb_database)
         client.switch_database(args.influxdb_database)
     else:
         client = None
@@ -204,8 +203,8 @@ if __name__ == "__main__":
     start = datetime.utcnow() - timedelta(minutes=5)
 
     while True:
+        end = datetime.utcnow()
         for MIRUBEE_USER_BUILDING in user_data['MIRUBEE_USER_BUILDINGS']:
-            end = datetime.utcnow()
             for MIRUBEE_BUILDING_METER in MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_METERS']:
                 for MIRUBEE_METER_CHANNEL in MIRUBEE_BUILDING_METER['MIRUBEE_METER_CHANNELS']:
                     if MIRUBEE_METER_CHANNEL['MIRUBEE_CHANNEL_MAIN']:
@@ -232,4 +231,4 @@ if __name__ == "__main__":
                             client.write_points(data)
                         time.sleep(sleep_interval)
 
-            start = end
+        start = end
