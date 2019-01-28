@@ -97,6 +97,16 @@ class MirubeeApi():
 
         return self._get(url)
 
+    def getAppliances(self, building_id):
+        url = "buildings/{}/appliances".format(building_id)
+
+        return self._get(url)
+
+    def getApplianceData(self, building_id, start, end, agg):
+        url = "buildings/{}/appliances".format(building_id)
+        # url = "{}?start={}&end={}&param=P".format(url, start.isoformat(), end.isoformat())
+
+        return self._get(url)
 
     def scan(self):
         user_data = {
@@ -231,4 +241,9 @@ if __name__ == "__main__":
                             client.write_points(data)
                         time.sleep(sleep_interval)
 
+            for MIRUBEE_BUILDING_APPLIANCE in MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_APPLIANCES']:
+                mirubee.getApplianceData(MIRUBEE_USER_BUILDING['MIRUBEE_BUILDING_ID'],
+                                       start,
+                                       end,
+                                        0)
         start = end
